@@ -881,6 +881,47 @@ func testBuild(t *testing.T, when spec.G, it spec.S) {
 				})
 			})
 
+			when.Pend("buildpackage image is used", func() {
+				// var fakePackage *fakes.Image
+
+				it.Before(func() {
+					// fakePackage = fakes.NewImage("example.com/some/package", "", nil)
+					// TODO: make package with meta buildpack (with one child)
+				})
+
+				it("all buildpacks are added to ephemeral builder", func() {
+					err := subject.Build(context.TODO(), BuildOptions{
+						Image:      "some/app",
+						Builder:    builderName,
+						ClearCache: true,
+						Buildpacks: []string{
+							"example.com/some/package",
+						},
+					})
+
+					h.AssertNil(t, err)
+					h.AssertEq(t, fakeLifecycle.Opts.Builder.Name(), defaultBuilderImage.Name())
+					bldr, err := builder.FromImage(defaultBuilderImage)
+					h.AssertNil(t, err)
+					h.AssertEq(t, bldr.Order(), dist.Order{
+						{Group: []dist.BuildpackRef{
+							{BuildpackInfo: dist.BuildpackInfo{ID: "meta.buildpack.id", Version: "meta.buildpack.version"}},
+						}},
+						// Child buildpacks should not be added to order
+					})
+					h.AssertEq(t, bldr.Buildpacks(), []dist.BuildpackInfo{
+						{
+							ID:      "meta.buildpack.id",
+							Version: "meta.buildpack.version",
+						},
+						{
+							ID:      "child.buildpack.id",
+							Version: "child.buildpack.version",
+						},
+					})
+				})
+			})
+
 			it("ensures buildpacks exist on builder", func() {
 				h.AssertError(t, subject.Build(context.TODO(), BuildOptions{
 					Image:      "some/app",

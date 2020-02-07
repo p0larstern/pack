@@ -881,12 +881,50 @@ func testBuild(t *testing.T, when spec.G, it spec.S) {
 				})
 			})
 
-			when.Pend("buildpackage image is used", func() {
-				// var fakePackage *fakes.Image
+			when.Focus("buildpackage image is used", func() {
+				var fakePackage *fakes.Image
 
 				it.Before(func() {
-					// fakePackage = fakes.NewImage("example.com/some/package", "", nil)
-					// TODO: make package with meta buildpack (with one child)
+					buildpackTar := createBuildpackTar(t, tmpDir, dist.BuildpackDescriptor{
+						API: api.MustParse("0.3"),
+						Info: dist.BuildpackInfo{
+							ID:      "metabuildpack.id",
+							Version: "metabuildpack.version",
+						},
+						Stacks: nil,
+						Order: dist.Order{{
+							Group: []dist.BuildpackRef{{
+								BuildpackInfo: dist.BuildpackInfo{
+									ID:      "child.buildpack.id",
+									Version: "child.buildpack.version",
+								},
+								Optional: false,
+							}},
+						}},
+					})
+
+					bpLayers := dist.BuildpackLayers{
+						"buildpack.1.id": {
+							"buildpack.1.version": {
+								API: api.MustParse("0.3"),
+								Stacks: []dist.Stack{
+									{
+										ID:     defaultBuilderStackID,
+										Mixins: []string{"mixinX", "build:mixinY", "run:mixinZ"},
+									},
+								},
+							},
+						},
+					}
+
+					fakePackage = fakes.NewImage("example.com/some/package", "", nil)
+					h.AssertNil(t, dist.SetLabel(fakePackage, "io.buildpacks.buildpack.layers", bpLayers))
+					//dist.SetLabel(fakePackage, "io.buildpacks.buildpack.layers", bpLayers)
+
+					err := fakePackage.AddLayer(buildpackTar)
+					h.AssertNil(t, err)
+
+					fakeImageFetcher.LocalImages[fakePackage.Name()] = fakePackage
 				})
 
 				it("all buildpacks are added to ephemeral builder", func() {
@@ -911,14 +949,20 @@ func testBuild(t *testing.T, when spec.G, it spec.S) {
 					})
 					h.AssertEq(t, bldr.Buildpacks(), []dist.BuildpackInfo{
 						{
-							ID:      "meta.buildpack.id",
-							Version: "meta.buildpack.version",
+							ID:      "metabuildpack.id",
+							Version: "metabuildpack.version",
 						},
 						{
 							ID:      "child.buildpack.id",
 							Version: "child.buildpack.version",
 						},
 					})
+				})
+
+				it("fails with non-existant buildpack image", func() {
+				})
+
+				it("fails when image has too many buildpacks", func() {
 				})
 			})
 
